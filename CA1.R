@@ -1,5 +1,6 @@
 install.packages(c("tidyverse", "ggplot2","dplyr","readr","robustbase","reshape2","gapminder"))
-install.packages("leaflet")
+install.packages("fmsb")
+
 
 library(readr)
 library(tidyverse)
@@ -11,6 +12,10 @@ library(gapminder)
 library(sf)
 library(tmap)
 library(leaflet)
+library(csodata)
+library(highcharter)
+library(plotly)
+library(fmsb)
 
 
 ireland_crime <- read.csv("crime_ireland.csv")
@@ -93,11 +98,6 @@ ireland_crime2 %>%
 
 
 
-
-
-
-
-
 group_data <- ireland_crime2 %>%
   group_by(Year, Region) %>%
   summarise(Total_Crimes = sum(Value, na.rm = TRUE))
@@ -105,44 +105,57 @@ group_data <- ireland_crime2 %>%
 # Create the line plot
 ggplot(group_data, aes(x = Year, y = Total_Crimes, group = Region, color = Region)) +
   geom_line() +
+  geom_point() +
   labs(title = "Total Crimes Per Region Over Years",
        x = "Year",
        y = "Total Crimes",
        color = "Region") +
   theme_minimal() +
-  theme(legend.position = "right") 
+  theme(legend.position = "right")
 
 
 # Create the scatter plot
-scatter_plot_custom <- ireland_crime2 %>%
-  group_by(Quarter, Year) %>%
+quarter_crimes <- ireland_crime2 %>%
+  group_by(Year, Quarter) %>%
   summarise(Total_Crimes = sum(Value, na.rm = TRUE))
 
 # Create the scatter plot
-ggplot(ireland_crime2, aes(x = Year, y = Value, color = Quarter)) +
-  geom_jitter(width = 0.2, height= 0, alpha=0.7) +
-  labs(title = "Scatterplot of Total Crimes Per Region Over Years",
-       x = "Year",
-       y = "Crimes",
-       color = "Quarter") +
+ggplot(quarter_crimes, aes(x = Quarter, y = Year, fill = Total_Crimes)) +
+  geom_tile() +
+  scale_fill_gradient(low = "lightblue", high = "darkred") +
+  labs(title = "Total Crimes Over Quarters and Years",
+       x = "Quarter",
+       y = "Year",
+       fill = "Total Crimes") +
   theme_minimal() +
-  theme(legend.position = "right")  # Adjust legend position if needed
+  theme(legend.position = "right")
+
+
 
 #QUESTION E
 
+#CRIMES PER COUNTIES AND REGION
 county_crimes <- ireland_crime2 %>%
   group_by(CountyCode, County) %>%
   summarise(Total_Crimes = sum(Value, na.rm = TRUE)) %>%
   arrange(desc(Total_Crimes))
 
+highchart() %>%
+  hc_chart(type = "column") %>%
+  hc_title(text = "Total Crimes by County") %>%
+  hc_xAxis(categories = county_crimes$County) %>%
+  hc_yAxis(title = list(text = "Total Crimes")) %>%
+  hc_add_series(
+    name = "Total Crimes",
+    data = county_crimes$Total_Crimes,
+    colorByPoint = TRUE,  # Color bars by point
+    colors = viridisLite::viridis(length(unique(ireland_crime2$Region)))  # Use a color palette
+  ) %>%
+  hc_tooltip(pointFormat = "Total Crimes: {point.y}") %>%
+  hc_plotOptions(column = list(stacking = "normal")) %>%
+  hc_legend(title = list(text = "Region"), enabled = TRUE)
 
-ggplot(county_crimes, aes(x = County, y = Total_Crimes, fill = CountyCode)) +
-  geom_bar(stat = "summary", fun = "mean", position = "dodge") +
-  labs(title = "Average Numeric Variable by Category",
-       x = "Categorical Variable",
-       y = "Average Numeric Variable")+
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 
 
 region_colors <- c("DUBLIN METROPOLITAN REGION" = "red", 
@@ -160,25 +173,45 @@ ggplot(ireland_crime2, aes(Year, Value, size = Value, colour = Region)) +
   labs(title = 'Year: 2003-2022', x = 'Year', y = 'Crimes')
 
 
-
-region_sum <- ireland_crime2 %>%
+top_crimes_per_county <- ireland_crime2 %>%
+  group_by(Region, Offence) %>%
+  summarise(Total_Value = sum(Value, na.rm = TRUE)) %>%
+  ungroup() %>%
+  arrange(Region, desc(Total_Value)) %>%
   group_by(Region) %>%
-  summarize(Value = sum(Value, na.rm = TRUE))
+  top_n(3, wt = Total_Value)
+
+column_chart <- top_crimes_per_county %>%
+  hchart("column", hcaes(x = Offence, y = Total_Value, group = Region)) %>%
+  hc_title(text = "Top Crimes Per County - Column Chart") %>%
+  hc_legend(layout = "vertical", align = "right", verticalAlign = "middle")
+
+column_chart
 
 
-# Assuming you have a dataset named 'crime_data'
-# You can replace this with your actual dataset
+quarter_with_max_crimes <- ireland_crime %>%
+  group_by(County, Quarter) %>%
+  summarise(Total_Crimes = sum(Value, na.rm = TRUE)) %>%
+  ungroup() %>%
+  arrange(County, desc(Total_Crimes)) %>%
+  group_by(County) %>%
+  slice(which.max(Total_Crimes))
 
-# Example dataset
-crime_data <- data.frame(
-  Region = c("East", "South", "West", "Midwest", "Southwest"),
-  County = c("Dublin", "Cork", "Galway", "Limerick", "Kerry"),
-  Year = rep(2003:2022, each = 5),
-  Quarter = rep(rep(1:4, each = 5), times = 20),
-  Value = sample(50:200, 100, replace = TRUE) * 10
-)
+ggplot(quarter_with_max_crimes, aes(x = reorder(County, Total_Crimes), y = Total_Crimes, fill = Quarter, text = paste("Crimes: ", Total_Crimes))) +
+geom_col(position = "dodge", color = "black", size = 0.2) +
+scale_fill_brewer(palette = "Set3") +
+labs(title = "Quarter with Maximum Crimes in Each County",
+     x = "County",
+     y = "Total Crimes",
+     fill = "Quarter") +
+theme_minimal() +
+theme(legend.position = "top",
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.title.y = element_text(margin = margin(r = 10)),
+      plot.title = element_text(hjust = 0.5))
 
-
+# Convert ggplot to plotly and display tooltip
+ggplotly(tooltip = "text")
 
 grouped_data_year <- ireland_crime2 %>%
   group_by(Year) %>%
@@ -186,3 +219,9 @@ grouped_data_year <- ireland_crime2 %>%
   arrange(desc(Total_Crimes))
 
 
+#QUESTION F 
+
+dummy_encoded_df <- cbind(ireland_crime2, model.matrix(~ Region + Offence - 1, data = ireland_crime2))
+
+# View the dummy-encoded data
+print(dummy_encoded_df)

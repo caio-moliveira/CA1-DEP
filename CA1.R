@@ -1,31 +1,29 @@
-install.packages(c("tidyverse", "ggplot2","dplyr","readr","robustbase","reshape2","gapminder"))
-install.packages("fmsb")
-
+install.packages(c("tidyverse", "ggplot2","dplyr","readr","robustbase","highcharter","reshape2","fastDummies","scales"))
+install.packages("robustbase")
 
 library(readr)
 library(tidyverse)
 library(ggplot2)
 library(dplyr)
 library(robustbase)
-library(reshape2)
-library(gapminder)
-library(sf)
-library(tmap)
-library(leaflet)
-library(csodata)
+library(tidyr)
 library(highcharter)
-library(plotly)
-library(fmsb)
+library(fastDummies)
+library(scales)
+library(reshape2)
 
 
+
+# Read file
 ireland_crime <- read.csv("crime_ireland.csv")
-
-
+# Filter out rows with 'Value'= 0
 ireland_crime2 <- ireland_crime[!(ireland_crime$Value == 0), ]
+# Reset row names in ireland_crime2 to start from 1.
 rownames(ireland_crime2) <- NULL
 
 
 # QUESTION A 
+
 # Function to identify variable types and create a plot
 identify_variable_types <- function(data) {
   variable_types <- sapply(data, function(x) {
@@ -58,20 +56,24 @@ identify_variable_types <- function(data) {
 identify_variable_types(ireland_crime2)
 
 # QUESTION B
+
+# Calculate summary statistics for 'Value' grouped by 'Year' in ireland_crime2.
 distance_summary_by_year <- ireland_crime2 %>% 
   group_by(Year) %>%
   summarize(
-    min = min(Value, na.rm = TRUE),
-    q1 = quantile(Value, 0.25, na.rm = TRUE),
-    median = quantile(Value, 0.5, na.rm = TRUE),
-    q3 = quantile(Value, 0.75, na.rm = TRUE),
-    max = max(Value, na.rm = TRUE),
-    mean = mean(Value, na.rm = TRUE),
-    sd = sd(Value, na.rm = TRUE),
-    missing = sum(is.na(Value))
+    min = min(Value, na.rm = TRUE),           # Minimum value
+    q1 = quantile(Value, 0.25, na.rm = TRUE), # First quartile
+    median = quantile(Value, 0.5, na.rm = TRUE), # Median
+    q3 = quantile(Value, 0.75, na.rm = TRUE), # Third quartile
+    max = max(Value, na.rm = TRUE),           # Maximum value
+    mean = mean(Value, na.rm = TRUE),         # Mean
+    sd = sd(Value, na.rm = TRUE),             # Standard deviation
+    missing = sum(is.na(Value))               # Count of missing values
   )
 
+# Display the resulting summary dataframe using the View() function.
 View(distance_summary_by_year)
+
 
 
 #QUESTION C
@@ -92,21 +94,26 @@ ireland_crime2 %>%
 
 #Robust Scale
 
-
+ireland_crime2 %>%
+  select(Value) %>%
+  mutate(Value_z = scale(Value)) %>%
+  summary()
 
 #QUESTION D
 
 
 
+# Group by 'Year' and 'Region', then calculate the sum of 'Value' for each group.
 group_data <- ireland_crime2 %>%
   group_by(Year, Region) %>%
   summarise(Total_Crimes = sum(Value, na.rm = TRUE))
 
-# Create the line plot
+
+# Create the line plot using group_data dataset.
 ggplot(group_data, aes(x = Year, y = Total_Crimes, group = Region, color = Region)) +
   geom_line() +
   geom_point() +
-  labs(title = "Total Crimes Per Region Over Years",
+  labs(title = "Ireland Total Crimes Per Region Over Years",
        x = "Year",
        y = "Total Crimes",
        color = "Region") +
@@ -114,16 +121,17 @@ ggplot(group_data, aes(x = Year, y = Total_Crimes, group = Region, color = Regio
   theme(legend.position = "right")
 
 
-# Create the scatter plot
+# Group by 'Year' and 'Quarter', then calculate the sum of 'Value' for each group.
 quarter_crimes <- ireland_crime2 %>%
   group_by(Year, Quarter) %>%
   summarise(Total_Crimes = sum(Value, na.rm = TRUE))
 
-# Create the scatter plot
+
+# Create the scatter plot using quarter_crimes dataset.
 ggplot(quarter_crimes, aes(x = Quarter, y = Year, fill = Total_Crimes)) +
   geom_tile() +
   scale_fill_gradient(low = "lightblue", high = "darkred") +
-  labs(title = "Total Crimes Over Quarters and Years",
+  labs(title = "Ireland Total Crimes Over Quarters and Years",
        x = "Quarter",
        y = "Year",
        fill = "Total Crimes") +
@@ -131,49 +139,56 @@ ggplot(quarter_crimes, aes(x = Quarter, y = Year, fill = Total_Crimes)) +
   theme(legend.position = "right")
 
 
-
 #QUESTION E
 
-#CRIMES PER COUNTIES AND REGION
+# Group by 'Region' and 'County', then calculate the sum of 'Value' for each group.
+# Arrange the results in descending order.
 county_crimes <- ireland_crime2 %>%
-  group_by(CountyCode, County) %>%
+  group_by(Region, County) %>%
   summarise(Total_Crimes = sum(Value, na.rm = TRUE)) %>%
   arrange(desc(Total_Crimes))
 
-highchart() %>%
-  hc_chart(type = "column") %>%
-  hc_title(text = "Total Crimes by County") %>%
-  hc_xAxis(categories = county_crimes$County) %>%
-  hc_yAxis(title = list(text = "Total Crimes")) %>%
-  hc_add_series(
-    name = "Total Crimes",
-    data = county_crimes$Total_Crimes,
-    colorByPoint = TRUE,  # Color bars by point
-    colors = viridisLite::viridis(length(unique(ireland_crime2$Region)))  # Use a color palette
-  ) %>%
-  hc_tooltip(pointFormat = "Total Crimes: {point.y}") %>%
-  hc_plotOptions(column = list(stacking = "normal")) %>%
-  hc_legend(title = list(text = "Region"), enabled = TRUE)
+
+#Create a grouped bar plot using ggplot for the county_crimes dataset.
+ggplot(county_crimes, aes(x = Total_Crimes, y = reorder(County, Total_Crimes), fill = Region)) +
+  geom_col() +
+  labs(title = "Total Crimes in Ireland by County",
+       x = "Total Crimes",
+       y = "County",
+       fill = "Region") +
+  scale_x_continuous(labels = scales::comma) +
+  theme_minimal() +
+  theme(legend.position = "top",
+        axis.text.y = element_text(hjust = 0),
+        axis.title.x = element_text(margin = margin(b = 10)),
+        plot.title = element_text(hjust = 0.5))
 
 
 
+# Group 'County' and 'Offence', then calculate the sum of 'Value' for each group.
+# Arrange the results by 'County' and 'Total_Value' in descending order.
+# Retain the top 3 offences for each county.
+top_crimes_per_region <- ireland_crime2 %>%
+  group_by(County, Offence) %>%
+  summarise(Total_Value = sum(Value, na.rm = TRUE)) %>%
+  ungroup() %>%
+  arrange(County, desc(Total_Value)) %>%
+  group_by(County) %>%
+  top_n(3, wt = Total_Value)
 
-region_colors <- c("DUBLIN METROPOLITAN REGION" = "red", 
-                   "EASTERN REGION" = "blue", 
-                   "NORTHERN REGION" = "green",
-                   "SOUTH EASTERN REGION" = "orange", 
-                   "WESTERN REGION" = "purple",
-                   "SOUTHERN REGION" = "yellow")
+#Create a highchart column chart using the top_crimes_per_county dataset.
+column_chart <- top_crimes_per_county %>%
+  hchart("column", hcaes(x = Offence, y = Total_Value, group = County)) %>%
+  hc_title(text = "Top 3 Crimes Per County in Ireland (2003-2022)") %>%
+  hc_legend(layout = "vertical", align = "right", verticalAlign = "middle")
 
-ggplot(ireland_crime2, aes(Year, Value, size = Value, colour = Region)) +
-  geom_point(alpha = 0.2, show.legend = FALSE) +
-  scale_colour_manual(values = region_colors) +
-  scale_size(range = c(2, 5)) +
-  facet_wrap(~Region) +
-  labs(title = 'Year: 2003-2022', x = 'Year', y = 'Crimes')
+column_chart
 
 
-top_crimes_per_county <- ireland_crime2 %>%
+# Group 'Region' and 'Offence', then calculate the sum of 'Value' for each group.
+# Arrange the results by 'Region' and 'Total_Value' in descending order.
+# Retain the top 3 offences for each Region.
+top_crimes_per_region <- ireland_crime2 %>%
   group_by(Region, Offence) %>%
   summarise(Total_Value = sum(Value, na.rm = TRUE)) %>%
   ungroup() %>%
@@ -181,14 +196,18 @@ top_crimes_per_county <- ireland_crime2 %>%
   group_by(Region) %>%
   top_n(3, wt = Total_Value)
 
-column_chart <- top_crimes_per_county %>%
+#Create a highchart column chart using the top_crimes_per_region dataset.
+column_chart2 <- top_crimes_per_region %>%
   hchart("column", hcaes(x = Offence, y = Total_Value, group = Region)) %>%
-  hc_title(text = "Top Crimes Per County - Column Chart") %>%
+  hc_title(text = "Top 3 Crimes Per County in Ireland (2003-2022)") %>%
   hc_legend(layout = "vertical", align = "right", verticalAlign = "middle")
 
-column_chart
+column_chart2
 
 
+# Group by 'County' and 'Quarter', then calculate the sum of 'Value' for each group.
+# Arrange the results by 'County' and 'Total_Crimes' in descending order.
+# Retain the row with the maximum total crimes for each county.
 quarter_with_max_crimes <- ireland_crime %>%
   group_by(County, Quarter) %>%
   summarise(Total_Crimes = sum(Value, na.rm = TRUE)) %>%
@@ -197,31 +216,77 @@ quarter_with_max_crimes <- ireland_crime %>%
   group_by(County) %>%
   slice(which.max(Total_Crimes))
 
-ggplot(quarter_with_max_crimes, aes(x = reorder(County, Total_Crimes), y = Total_Crimes, fill = Quarter, text = paste("Crimes: ", Total_Crimes))) +
-geom_col(position = "dodge", color = "black", size = 0.2) +
-scale_fill_brewer(palette = "Set3") +
-labs(title = "Quarter with Maximum Crimes in Each County",
-     x = "County",
-     y = "Total Crimes",
-     fill = "Quarter") +
-theme_minimal() +
-theme(legend.position = "top",
-      axis.text.x = element_text(angle = 45, hjust = 1),
-      axis.title.y = element_text(margin = margin(r = 10)),
-      plot.title = element_text(hjust = 0.5))
+# Create a grouped bar plot using ggplot for the quarter_with_max_crimes dataset.
+ggplot(quarter_with_max_crimes, aes(x = County, y = Total_Crimes, fill = Quarter, text = paste("Crimes: ", Total_Crimes))) +
+  geom_bar(stat = "identity", position = "stack", color = "black", size = 0.2) +
+  scale_fill_brewer(palette = "Set3") +
+  labs(title = "Most Violent Quarters of Each County in Ireland (2003-2022)",
+       x = "County",
+       y = "Total Crimes",
+       fill = "Quarter") +
+  theme_minimal() +
+  theme(legend.position = "top",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(margin = margin(r = 10)),
+        plot.title = element_text(hjust = 0.5))
 
-# Convert ggplot to plotly and display tooltip
-ggplotly(tooltip = "text")
 
+
+
+# Group by 'Year', then calculate the sum of 'Value' for each year.
+# Arrange the results in descending order.
 grouped_data_year <- ireland_crime2 %>%
   group_by(Year) %>%
-  summarise(Total_Crimes = sum(Value))%>%
+  summarise(Total_Crimes = sum(Value)) %>%
   arrange(desc(Total_Crimes))
+
+# Create a line plot using ggplot for the grouped_data_year dataset.
+ggplot(grouped_data_year, aes(x = Year, y = Total_Crimes, group = 1)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  labs(title = "Total Crimes per Year",
+       x = "Year",
+       y = "Total Crimes") +
+  scale_y_continuous(labels = comma) +
+  theme_minimal()
+
+
 
 
 #QUESTION F 
 
-dummy_encoded_df <- cbind(ireland_crime2, model.matrix(~ Region + Offence - 1, data = ireland_crime2))
+# Create dummy variables for 'Region' and 'Quarter'.
+ireland_crime3 <- dummy_cols(ireland_crime2, select_columns = c('Region', 'Quarter'),
+                             remove_selected_columns = TRUE)
 
-# View the dummy-encoded data
-print(dummy_encoded_df)
+# Calculate the correlation matrix for numeric columns.
+correlation_matrix <- cor(ireland_crime3[, sapply(ireland_crime3, is.numeric)])
+
+# Create a heatmap using ggplot for the correlation_matrix.
+ggplot(data = melt(correlation_matrix), aes(x = Var1, y = Var2, fill = value)) +
+  
+  geom_tile() +
+  scale_fill_gradient2(
+    low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1,1),
+    space = "Lab", name = "Correlation"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+#QUESTION G 
+
+# Extract numerical and categorical data from ireland_crime3.
+numerical_data <- ireland_crime3[, sapply(ireland_crime3, is.numeric)]
+categorical_data <- ireland_crime3[, sapply(ireland_crime3, is.factor)]
+
+# Perform Principal Component Analysis (PCA) on the numerical data.
+pca_result <- prcomp(numerical_data[, c(2:14)], scale. = TRUE, center = TRUE)
+
+
+# Extract loadings
+loadings <- pca_result$rotation
+
+# Summary of PCA result
+summary(pca_result)
+

@@ -1,5 +1,4 @@
 install.packages(c("tidyverse", "ggplot2","dplyr","readr","robustbase","highcharter","reshape2","fastDummies","scales"))
-install.packages("robustbase")
 
 library(readr)
 library(tidyverse)
@@ -168,7 +167,7 @@ ggplot(county_crimes, aes(x = Total_Crimes, y = reorder(County, Total_Crimes), f
 # Group 'County' and 'Offence', then calculate the sum of 'Value' for each group.
 # Arrange the results by 'County' and 'Total_Value' in descending order.
 # Retain the top 3 offences for each county.
-top_crimes_per_region <- ireland_crime2 %>%
+top_crimes_per_county <- ireland_crime2 %>%
   group_by(County, Offence) %>%
   summarise(Total_Value = sum(Value, na.rm = TRUE)) %>%
   ungroup() %>%
@@ -218,7 +217,7 @@ quarter_with_max_crimes <- ireland_crime %>%
 
 # Create a grouped bar plot using ggplot for the quarter_with_max_crimes dataset.
 ggplot(quarter_with_max_crimes, aes(x = County, y = Total_Crimes, fill = Quarter, text = paste("Crimes: ", Total_Crimes))) +
-  geom_bar(stat = "identity", position = "stack", color = "black", size = 0.2) +
+  geom_bar(stat = "identity", position = "stack", color = "black", linewidth = 0.2) +
   scale_fill_brewer(palette = "Set3") +
   labs(title = "Most Violent Quarters of Each County in Ireland (2003-2022)",
        x = "County",
